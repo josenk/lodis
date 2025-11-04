@@ -5,10 +5,11 @@ A lightweight, in-memory key-value store with Redis-compatible API. Perfect drop
 ## Features
 
 - **Redis-compatible API** - use `from lodis import Redis` as a drop-in replacement
+- **Asyncio support** - full async/await support via `import lodis.asyncio as lodis`
 - **Multiple data types** - Strings, Lists, and Sets (Sorted Sets and Hashes coming soon)
 - **16 isolated databases** - just like Redis (db 0-15)
 - **In-memory storage** with automatic expiration
-- **Thread-safe operations** using mutex locks
+- **Thread-safe operations** using mutex locks (sync) / asyncio locks (async)
 - **Key-value storage** with TTL support
 - **Redis-style counters** with INCR/DECR operations
 - **List operations** - LPUSH, RPUSH, LPOP, RPOP, LRANGE, and more
@@ -74,6 +75,90 @@ from lodis import Lodis
 cache = Lodis()
 cache.set("key", "value")
 cache.get("key")
+```
+
+## Asyncio Support
+
+Lodis provides full async/await support for use in asyncio applications:
+
+```python
+import asyncio
+import lodis.asyncio as lodis
+
+async def main():
+    # Create async Redis-compatible client
+    r = lodis.Redis()
+
+    # All methods are async and must be awaited
+    await r.set("user:123", '{"name": "Alice"}', ex=300)
+    user = await r.get("user:123")
+    print(user)
+
+    # Async list operations
+    await r.rpush("queue", "task1", "task2", "task3")
+    task = await r.lpop("queue")
+    print(f"Processing: {task}")
+
+    # Async set operations
+    await r.sadd("tags", "python", "async", "redis")
+    tags = await r.smembers("tags")
+    print(f"Tags: {tags}")
+
+    # Async counters
+    await r.incr("api_calls")
+    calls = await r.get("api_calls")
+    print(f"API calls: {calls}")
+
+    # Concurrent operations with asyncio.gather
+    results = await asyncio.gather(
+        r.set("key1", "value1"),
+        r.set("key2", "value2"),
+        r.set("key3", "value3"),
+    )
+
+    values = await asyncio.gather(
+        r.get("key1"),
+        r.get("key2"),
+        r.get("key3"),
+    )
+    print(f"Values: {values}")
+
+# Run the async function
+asyncio.run(main())
+```
+
+**Key differences from sync version:**
+- Import from `lodis.asyncio` instead of `lodis`
+- All methods are `async` and must be `await`ed
+- Uses `asyncio.Lock()` instead of `multiprocessing.Lock()`
+- Perfect for integration with async frameworks like FastAPI, aiohttp, etc.
+
+**Example with FastAPI:**
+
+```python
+from fastapi import FastAPI
+import lodis.asyncio as lodis
+
+app = FastAPI()
+cache = lodis.Redis()
+
+@app.get("/items/{item_id}")
+async def read_item(item_id: int):
+    # Check cache first
+    cached = await cache.get(f"item:{item_id}")
+    if cached:
+        return {"item": cached, "source": "cache"}
+
+    # Simulate fetching from database
+    item = f"Item {item_id} data"
+    await cache.set(f"item:{item_id}", item, ex=300)
+
+    return {"item": item, "source": "database"}
+
+@app.post("/counter/increment")
+async def increment_counter():
+    count = await cache.incr("api_counter")
+    return {"count": count}
 ```
 
 ## API Reference
